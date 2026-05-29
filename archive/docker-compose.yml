@@ -1,0 +1,27 @@
+services:
+  elite-etl:
+    build: .
+    container_name: elite-dangerous-db
+    volumes:
+      # Journal logs from your local machine (read-only)
+      - C:/Users/akarr/OneDrive/Documents/ProjectFiles/EliteDangerous/JournalLogs:/data/logs:ro
+      # Persistent database file — stored alongside your project files
+      - ./db:/data
+    environment:
+      ED_LOGS_DIR: /data/logs
+      ED_DB_PATH: /data/elite.duckdb
+    # Override entrypoint to just run ETL (no interactive shell):
+    # command: ["--verbose"]
+
+  # Optional: run ETL-only without interactive shell
+  elite-etl-headless:
+    build: .
+    container_name: elite-etl-headless
+    profiles: ["headless"]
+    volumes:
+      - C:/Users/akarr/OneDrive/Documents/ProjectFiles/EliteDangerous/JournalLogs:/data/logs:ro
+      - ./db:/data
+    environment:
+      ED_LOGS_DIR: /data/logs
+      ED_DB_PATH: /data/elite.duckdb
+    entrypoint: ["python", "/app/etl.py", "--verbose"]

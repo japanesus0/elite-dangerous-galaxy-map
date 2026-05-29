@@ -1,0 +1,12 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir \
+    pytest==8.3.3
+
+# Tests stub out psycopg2, but copy the code anyway so etl/watcher are importable
+COPY etl.py watcher.py map_api.py schema.sql ./
+COPY tests ./tests
+
+CMD ["python", "-m", "pytest", "tests/", "-v"]

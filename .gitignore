@@ -1,0 +1,55 @@
+# ── Secrets ─────────────────────────────────────────────────────
+# Real credentials — never commit. Track .env.example instead.
+.env
+.env.local
+*.pem
+*.key
+
+# ── Python ──────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+
+# ── Journal data (large, regenerable, may contain personal data) ─
+# Ignore the contents of JournalLogs/ but keep the directory itself
+# via the .gitkeep exception (Git cannot version empty dirs).
+JournalLogs/*
+!JournalLogs/.gitkeep
+# Sample log historically kept in archive/ contains commander FID + ranks —
+# keep it local but never commit it to a public repo.
+archive/Journal*.log
+
+# ── Backups / archives ──────────────────────────────────────────
+*.zip
+*.tar.gz
+*.bak
+*_backup.*
+
+# ── Claude Code / agent harness state (user-local) ──
+.claude/
+
+# ── IDE / editor ────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Docker / runtime ────────────────────────────────────────────
+postgres_data/
+
+# ── Test / build artifacts ──────────────────────────────────────
+.pytest_cache/
+node_modules/
+dist/
+build/

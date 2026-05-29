@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Elite Dangerous — Galaxy Map</title>
+  <link rel="stylesheet" href="/static/map.css">
+</head>
+<body>
+
+<!-- Loading screen -->
+<div id="loading">
+  <h1>Elite Dangerous &mdash; Galaxy Map</h1>
+  <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
+  <div id="loading-status">Initialising…</div>
+</div>
+
+<!-- Stats bar -->
+<div id="stats-bar">
+  <span class="logo">ED&nbsp;Map</span>
+  <div class="stat-divider"></div>
+  <div class="stat"><span class="stat-label">JUMPS</span><span class="stat-value" id="s-jumps">—</span></div>
+  <div class="stat"><span class="stat-label">LY TRAVELLED</span><span class="stat-value" id="s-ly">—</span></div>
+  <div class="stat"><span class="stat-label">SYSTEMS</span><span class="stat-value" id="s-systems">—</span></div>
+  <div class="stat"><span class="stat-label">DISCOVERIES</span><span class="stat-value green" id="s-disc">—</span></div>
+  <div class="stat"><span class="stat-label">EARTH-LIKES</span><span class="stat-value cyan" id="s-el">—</span></div>
+  <div class="stat"><span class="stat-label">BOUNTIES</span><span class="stat-value red" id="s-bounties">—</span></div>
+  <div class="stat"><span class="stat-label">CREDITS</span><span class="stat-value yellow" id="s-credits">—</span></div>
+  <div class="stat"><span class="stat-label">MISSIONS</span><span class="stat-value" id="s-missions">—</span></div>
+  <div class="stat"><span class="stat-label">SESSIONS</span><span class="stat-value" id="s-sessions">—</span></div>
+  <div class="stat-divider"></div>
+  <div class="stat"><span class="stat-label">MATERIALS</span><span class="stat-value" id="s-materials">—</span></div>
+  <div class="stat"><span class="stat-label">MINERALS</span><span class="stat-value green" id="s-minerals">—</span></div>
+</div>
+
+<!-- Legend -->
+<div id="legend">
+  <div class="legend-title">SYSTEM TYPE</div>
+  <div class="legend-row"><div class="legend-dot" style="background:#1e6bbf"></div>Transit</div>
+  <div class="legend-row"><div class="legend-dot" style="background:#00e676"></div>First Discovery</div>
+  <div class="legend-row"><div class="legend-dot" style="background:#00b0ff"></div>Earth-Like World</div>
+  <div class="legend-row"><div class="legend-dot" style="background:#ff1744"></div>Bounty Combat</div>
+  <div class="legend-row"><div class="legend-dot" style="background:#ffab00"></div>Discovery + Combat</div>
+  <div class="legend-row"><div class="legend-dot" style="background:#ffd600"></div>Sol</div>
+  <div class="legend-row"><div class="legend-dot" style="background:#ff6d00"></div>Sgr A*</div>
+  <div class="legend-row"><div class="legend-dot" style="background:#e040fb"></div>Colonia</div>
+</div>
+
+<!-- View controls -->
+<div id="controls">
+  <div class="ctrl-title">VIEW</div>
+  <div class="ctrl-row">
+    <label>Path</label>
+    <select id="sel-path">
+      <option value="1">Visible</option>
+      <option value="0">Hidden</option>
+    </select>
+  </div>
+  <div class="ctrl-row">
+    <label>Point size</label>
+    <input type="range" id="range-size" min="1" max="8" value="3" step="0.5">
+  </div>
+  <div class="ctrl-row">
+    <label>Speed</label>
+    <select id="sel-speed" title="Playback speed — press 1-6 to switch">
+      <option value="0.25">0.25×</option>
+      <option value="0.5">0.5×</option>
+      <option value="1" selected>1×</option>
+      <option value="5">5×</option>
+      <option value="20">20×</option>
+      <option value="100">100×</option>
+    </select>
+  </div>
+  <div class="ctrl-row" style="margin-top:4px">
+    <button id="btn-bounty-log" title="Toggle Bounty Log (B)" style="
+      background:none; border:1px solid rgba(255,23,68,0.5);
+      color:var(--ed-red); font-family:var(--font); font-size:0.65rem;
+      padding:4px 10px; border-radius:2px; cursor:pointer; letter-spacing:1px;
+      width:100%; text-align:left;
+    ">⚔ BOUNTY LOG</button>
+  </div>
+  <div class="ctrl-row">
+    <button id="btn-mining-log" title="Toggle Mining Log (M)" style="
+      background:none; border:1px solid rgba(0,230,118,0.4);
+      color:var(--ed-green); font-family:var(--font); font-size:0.65rem;
+      padding:4px 10px; border-radius:2px; cursor:pointer; letter-spacing:1px;
+      width:100%; text-align:left;
+    ">⛏ MINING LOG</button>
+  </div>
+  <div class="ctrl-row">
+    <button id="btn-bounty-chart" title="Toggle Bounty Chart (X)" style="
+      background:none; border:1px solid rgba(255,23,68,0.4);
+      color:var(--ed-red); font-family:var(--font); font-size:0.65rem;
+      padding:4px 10px; border-radius:2px; cursor:pointer; letter-spacing:1px;
+      width:100%; text-align:left;
+    ">📊 BOUNTY CHART</button>
+  </div>
+  <div class="ctrl-row">
+    <label>Follow cam</label>
+    <select id="sel-follow" title="Follow the current jump with the camera (F to toggle)">
+      <option value="0">Off</option>
+      <option value="1" selected>On</option>
+    </select>
+  </div>
+  <div class="ctrl-row" style="flex-direction:column;align-items:flex-start;gap:2px;margin-top:2px">
+    <label style="min-width:unset">Last N jumps</label>
+    <div style="display:flex;align-items:center;gap:6px;width:100%">
+      <input type="range" id="range-last-n" min="0" max="500" value="0" step="1" style="flex:1;width:70px">
+      <input type="number" id="input-last-n" min="0" max="500" value="0" step="1"
+             title="0 = show all; >0 = last N jumps"
+             style="
+               background: rgba(10,20,40,0.9);
+               border: 1px solid var(--ed-border);
+               color: var(--ed-blue);
+               font-family: var(--font);
+               font-size: 0.62rem;
+               width: 54px; padding: 2px 4px; border-radius: 2px;
+               text-align: right;
+             ">
+      <span id="last-n-label" style="color:#4a7a9b;font-size:0.58rem;min-width:22px;text-align:right">All</span>
+    </div>
+  </div>
+  <div class="ctrl-row" id="commander-row" style="display:none;margin-top:4px">
+    <label>Cmdr</label>
+    <select id="sel-commander" style="flex:1;max-width:130px"><option value="">All</option></select>
+  </div>
+</div>
+
+<!-- Bounty activity chart (above timeline, aligned to slider by JS) -->
+<div id="bounty-chart">
+  <canvas id="bounty-chart-canvas"></canvas>
+  <div id="bounty-chart-label">⚔ BOUNTY ACTIVITY</div>
+  <div id="bounty-chart-peak">—</div>
+  <div id="bounty-chart-marker"></div>
+</div>
+
+<!-- Timeline -->
+<div id="timeline">
+  <button id="btn-play"  title="Play / Pause (Space)">▶ PLAY</button>
+  <button id="btn-reset" title="Restart timeline (0)">⟳</button>
+  <button class="btn-step" id="btn-step-back" title="Step back one jump">◀</button>
+  <button class="btn-step" id="btn-step-fwd"  title="Step forward one jump">▶</button>
+  <input type="range" id="slider" min="0" value="0" step="1">
+  <span id="timeline-progress">0 / 0</span>
+  <span id="timeline-date">—</span>
+</div>
+
+<!-- Keyboard cheatsheet toggle (bottom-right corner of the canvas, above timeline) -->
+<button id="btn-keys" title="Keyboard shortcuts (?)">?</button>
+<div id="keys-panel" aria-hidden="true">
+  <div id="keys-header">
+    <span>Keyboard Shortcuts</span>
+    <button id="btn-close-keys" title="Close (Esc or ?)">✕</button>
+  </div>
+  <div id="keys-body">
+    <div class="keys-section">
+      <div class="keys-section-title">Camera</div>
+      <div class="keys-row"><span class="keys-kbd">W</span><span class="keys-kbd">A</span><span class="keys-kbd">S</span><span class="keys-kbd">D</span><span class="keys-desc">Pan target on the galactic plane</span></div>
+      <div class="keys-row"><span class="keys-kbd">Q</span><span class="keys-kbd">E</span><span class="keys-desc">Pan up / down</span></div>
+      <div class="keys-row"><span class="keys-kbd">F</span><span class="keys-desc">Toggle follow camera</span></div>
+      <div class="keys-row keys-hint">Movement turns follow-cam off automatically.</div>
+    </div>
+    <div class="keys-section">
+      <div class="keys-section-title">Timeline</div>
+      <div class="keys-row"><span class="keys-kbd">Space</span><span class="keys-desc">Play / Pause</span></div>
+      <div class="keys-row"><span class="keys-kbd">0</span><span class="keys-desc">Restart timeline</span></div>
+      <div class="keys-row"><span class="keys-kbd">1</span>–<span class="keys-kbd">6</span><span class="keys-desc">Speed: 0.25× / 0.5× / 1× / 5× / 20× / 100×</span></div>
+    </div>
+    <div class="keys-section">
+      <div class="keys-section-title">Panels</div>
+      <div class="keys-row"><span class="keys-kbd">B</span><span class="keys-desc">Toggle Bounty Log</span></div>
+      <div class="keys-row"><span class="keys-kbd">M</span><span class="keys-desc">Toggle Mining Log</span></div>
+      <div class="keys-row"><span class="keys-kbd">X</span><span class="keys-desc">Toggle Bounty Chart</span></div>
+    </div>
+    <div class="keys-section">
+      <div class="keys-section-title">Mouse</div>
+      <div class="keys-row"><span class="keys-kbd">Left-drag</span><span class="keys-desc">Orbit</span></div>
+      <div class="keys-row"><span class="keys-kbd">Right-drag</span><span class="keys-desc">Pan</span></div>
+      <div class="keys-row"><span class="keys-kbd">Wheel</span><span class="keys-desc">Zoom</span></div>
+      <div class="keys-row"><span class="keys-kbd">Click</span><span class="keys-desc">System detail (visited dots only)</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Tooltip -->
+<div id="tooltip"></div>
+
+<!-- Active-jump label (projected from world coords each frame) -->
+<div id="active-jump-label">
+  <div><span id="ajl-ship">—</span><span id="ajl-ident"></span></div>
+  <div id="ajl-system">—</div>
+</div>
+
+<!-- Bounty panel (left) -->
+<div id="bounty-panel">
+  <div id="bounty-header">
+    <span id="bounty-title">⚔ Bounty Log</span>
+    <button id="btn-close-bounty" title="Close">✕</button>
+  </div>
+  <div id="bounty-body">
+    <div style="color:#4a7a9b;font-size:0.65rem">Loading bounty data…</div>
+  </div>
+</div>
+
+<!-- Mining panel (right) -->
+<div id="mining-panel">
+  <div id="mining-header">
+    <span id="mining-title">⛏ Mining Log</span>
+    <button id="btn-close-mining" title="Close">✕</button>
+  </div>
+  <div id="mining-body">
+    <div style="color:#4a7a9b;font-size:0.65rem">Loading mining data…</div>
+  </div>
+</div>
+
+<!-- Ship Viewer (bottom-left) -->
+<div id="ship-viewer">
+  <div id="ship-viewer-label">
+    <div id="ship-viewer-name">—</div>
+    <div id="ship-viewer-ident"></div>
+  </div>
+  <div id="ship-viewer-canvas-area"></div>
+  <div id="ship-viewer-footer">CURRENT SHIP</div>
+</div>
+
+<!-- System Info (bottom-right) -->
+<div id="sys-info">
+  <div id="sys-info-title">Current System</div>
+  <div id="sys-info-body">
+    <div style="color:#4a7a9b;font-size:0.62rem">Loading…</div>
+  </div>
+</div>
+
+<!-- Detail panel -->
+<div id="detail-panel">
+  <div id="detail-header">
+    <span id="detail-title">System Detail</span>
+    <button id="btn-close" title="Close">✕</button>
+  </div>
+  <div id="detail-body">
+    <p style="color:#4a7a9b;font-size:0.65rem">Click a system to view details.</p>
+  </div>
+</div>
+
+<!-- Three.js r128 — vendored locally to remove CDN dependency / supply-chain risk.
+     Loaded as a classic UMD script so it sets `window.THREE` before the ES
+     modules below run. -->
+<script src="/static/vendor/three.r128.min.js"></script>
+
+<!-- App code — split into ES modules under /static/js/. `type="module"` is
+     deferred by default, so the DOM is fully parsed by the time main.js runs. -->
+<script type="module" src="/static/js/main.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,127 @@
+services:
+
+  # ── PostgreSQL ───────────────────────────────────────────────
+  # Starts automatically on `docker compose up`.
+  # Schema is applied once on first boot via initdb.d.
+  # Data persists in the named volume `postgres_data` across restarts.
+  #
+  # Connect with DBeaver / pgAdmin:
+  #   host: localhost  port: 5432  db: elite_dangerous
+  #   user: elite      password: (see .env)
+  postgres:
+    image: postgres:16-alpine
+    container_name: elite-postgres
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    env_file: .env
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  # ── ETL (one-shot loader) ─────────────────────────────────────
+  # Reads all Journal*.log files from JournalLogs/, loads into
+  # PostgreSQL, then exits.  Run this manually after adding logs.
+  #
+  #   docker compose run --rm elite-etl           # normal load
+  #   docker compose run --rm elite-etl --rebuild # drop + full reload
+  #   docker compose run --rm elite-etl --verbose # per-file progress
+  elite-etl:
+    build:
+      context: .
+      dockerfile: Dockerfile.etl
+    image: elite-etl
+    container_name: elite-etl
+    volumes:
+      - ../JournalLogs:/data/logs:ro   # sibling JournalLogs folder (read-only)
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      ED_LOGS_DIR:   /data/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── Journal log watcher (continuous) ─────────────────────────
+  # Polls JournalLogs/ every POLL_INTERVAL seconds.
+  # Drops new Journal*.log files into JournalLogs/ and they will be
+  # loaded automatically, then moved to JournalLogs/Loaded/.
+  # On startup it also moves any files the ETL already processed.
+  #
+  #   docker compose up -d elite-watcher
+  #   docker compose logs -f elite-watcher
+  elite-watcher:
+    build:
+      context: .
+      dockerfile: Dockerfile.watcher
+    image: elite-watcher
+    container_name: elite-watcher
+    volumes:
+      - ../JournalLogs:/data/logs      # read-write — moves files to Loaded/
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      ED_LOGS_DIR:   /data/logs
+      POLL_INTERVAL: "30"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    # Probes that the watcher can still reach Postgres. We don't probe
+    # `last_processed_log < N minutes ago` because a watcher with nothing
+    # to do (no new files) is the normal steady state, not a failure.
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import os, psycopg2, sys; psycopg2.connect(host=os.environ.get('POSTGRES_HOST','postgres'), port=int(os.environ.get('POSTGRES_PORT','5432')), dbname=os.environ.get('POSTGRES_DB','elite_dangerous'), user=os.environ.get('POSTGRES_USER','elite'), password=os.environ.get('POSTGRES_PASSWORD','')).close()\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ── Tests (one-shot) ──────────────────────────────────────────
+  # Runs pytest against the parser test suite. No DB required.
+  #
+  #   docker compose run --rm elite-tests
+  elite-tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    image: elite-tests
+    container_name: elite-tests
+    profiles: ["test"]   # only built on explicit `run elite-tests`
+
+  # ── Galaxy Map (Three.js) ─────────────────────────────────────
+  # Interactive 3D galaxy map served as a single-page app.
+  #
+  #   docker compose up -d elite-map
+  # Then open: http://localhost:8051
+  elite-map:
+    build:
+      context: .
+      dockerfile: Dockerfile.map
+    image: elite-map
+    container_name: elite-map
+    ports:
+      - "8051:8051"
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      MAP_HOST:      0.0.0.0
+      MAP_PORT:      "8051"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://localhost:8051/api/health',timeout=3); sys.exit(0 if r.status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 10s
+
+volumes:
+  postgres_data:    # PostgreSQL data persists here between restarts
