@@ -1,8 +1,14 @@
 # Elite Dangerous Galaxy Map
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Stack](https://img.shields.io/badge/stack-Three.js%20%C2%B7%20FastAPI%20%C2%B7%20PostgreSQL-1a9fff)](#)
+[![Tests](https://img.shields.io/badge/tests-19%20passing-00a855)](#)
+
 A self-hosted 3D galaxy map for Elite Dangerous, driven by your local journal
 logs. Drop `.log` files into `JournalLogs/`, watch them flow into PostgreSQL,
 then scrub through your history in a Three.js 3D view.
+
+![Galaxy map screenshot](ed-map/docs/screenshot.png)
 
 ```
 JournalLogs/Journal*.log
