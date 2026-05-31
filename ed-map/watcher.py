@@ -84,26 +84,58 @@ def move_already_processed(con) -> None:
     print(f"Startup cleanup complete — {len(to_move)} file(s) moved.\n", flush=True)
 
 
-def load_and_move(fpath: Path, con) -> None:
-    """Parse one journal file, insert into PostgreSQL, move to Loaded/."""
+def _move_to_loaded(fpath: Path) -> None:
+    """Move a processed journal file into the Loaded/ subdirectory.
+
+    Filesystem-only — assumes the file is already recorded in processed_logs.
+    If a same-named file already exists in Loaded/ (e.g. a re-drop), the new
+    one is suffixed with a unix timestamp to avoid clobbering.
+    """
     fname = fpath.name
-    print(f"  → {fname}", flush=True)
+    dest  = LOADED_DIR / fname
+    if dest.exists():
+        dest = LOADED_DIR / f"{fpath.stem}_dup_{int(time.time())}{fpath.suffix}"
     try:
-        parsed, errors = process_files_list([fpath], con, verbose=True)
-        mark_files_processed(con, [fname], rows_loaded=parsed)
-        dest = LOADED_DIR / fname
-        # If a file with the same name already exists in Loaded/, suffix it
-        if dest.exists():
-            stem   = fpath.stem
-            suffix = fpath.suffix
-            dest   = LOADED_DIR / f"{stem}_dup_{int(time.time())}{suffix}"
         shutil.move(str(fpath), str(dest))
-        print(f"  ✓ {fname}: {parsed:,} events loaded → moved to Loaded/")
-        if errors:
-            print(f"    ({errors} parse errors, ignored)")
     except Exception as e:
-        print(f"  ✗ {fname}: {e}", file=sys.stderr)
-        # Don't mark as processed — will retry next poll cycle
+        # File processed but couldn't be moved — log and keep going. The
+        # next poll will skip it (it's already in processed_logs) but it'll
+        # clutter the watch dir until the user resolves the FS issue.
+        print(f"  ✗ could not move {fname}: {e}", file=sys.stderr)
+
+
+def load_batch(new_files: list, con) -> None:
+    """Parse + insert + refresh once for the whole batch, then move files.
+
+    This is the watcher's hot path. Calling process_files_list with the
+    entire batch coalesces what would otherwise be N individual
+    REFRESH MATERIALIZED VIEW calls (one per file, ~3-4 s each at current
+    data volume) into a single refresh — dramatically faster on backlogs.
+
+    Per-file parse errors are caught inside process_files_list, so one bad
+    file doesn't kill the batch. A whole-batch DB failure raises out of
+    this function with no files marked processed — they'll be retried on
+    the next poll cycle.
+    """
+    if not new_files:
+        return
+
+    # process_files_list logs per-file in verbose mode ("  filename … N events")
+    # so we get the same visibility as the old per-file path.
+    parsed, errors = process_files_list(new_files, con, verbose=True)
+
+    # All-or-nothing: only mark files as processed after the batch insert
+    # + matview refresh have committed. process_files_list commits itself.
+    mark_files_processed(con, [f.name for f in new_files], rows_loaded=parsed)
+
+    moved = 0
+    for fpath in new_files:
+        _move_to_loaded(fpath)
+        moved += 1
+
+    print(f"  ✓ {moved} file(s) loaded ({parsed:,} events) → moved to Loaded/")
+    if errors:
+        print(f"    ({errors} parse errors, ignored)")
 
 
 # ── main loop ──────────────────────────────────────────────────
@@ -127,8 +159,7 @@ def watch_loop(con) -> None:
             new_files = find_new_files(con)
             if new_files:
                 print(f"[{_now()}] Found {len(new_files)} new file(s):")
-                for fpath in new_files:
-                    load_and_move(fpath, con)
+                load_batch(new_files, con)
                 print(f"[{_now()}] Batch complete.\n", flush=True)
         except psycopg2.OperationalError as e:
             # Connection dropped — reconnect on next cycle
